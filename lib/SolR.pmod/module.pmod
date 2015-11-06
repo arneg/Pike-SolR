@@ -229,6 +229,10 @@ class Collection {
     }
 
     object schema = Schema(this);
+
+    void select(mapping args, call_cb cb, mixed ... extra) {
+        get("select", args, cb, @extra);
+    }
 }
 
 class Schema {

@@ -1,5 +1,3 @@
-#define SOLR_DEBUG
-
 #ifdef SOLR_DEBUG
 # define solr_debug(a ...)        werror(a)
 #else
@@ -42,8 +40,8 @@ class Instance {
             return;
         }
 
-        if (ret->errors && sizeof(ret->errors)) {
-            cb(0, ret);
+        if (ret->errors && sizeof(ret->errors) || ret->error) {
+            cb(0, ret, @extra);
             return;
         }
 
@@ -59,8 +57,6 @@ class Instance {
         
         // TODO: check return code
         //
-        write("XML:\n%s\n----\n", s);
-
         if (mixed err = catch (ret = Parser.XML.Tree.parse_input(s))) {
             // TODO: test this case for real
             cb(0, Error(([ "name" : "invalid_xml", "error" : describe_error(err) ])), @extra);
@@ -91,8 +87,9 @@ class Instance {
 
         solr_debug("post_json: %O %O\n", rurl, data);
 
-        http->async_post_url(rurl, string_to_utf8(Standards.JSON.encode(data)),
-                             headers_ok, json_data_ok, fail, cb, extra);
+        http->async_do_method_url("POST", rurl, 0, string_to_utf8(Standards.JSON.encode(data)),
+                                  ([ "Content-Type" : "application/json" ]),
+                                  headers_ok, json_data_ok, fail, ({ cb, extra }));
     }
 
     void post_xml(string path, mixed data, call_cb cb, mixed ... extra) {
@@ -220,8 +217,12 @@ class Collection {
         instance->get(path, args, cb, @extra);
     }
 
-    void update(array(mapping) documents, call_cb cb, mixed ... extra) {
+    void update(mapping|array(mapping) documents, call_cb cb, mixed ... extra) {
         post("update", documents, cb, @extra);
+    }
+
+    void commit(call_cb cb, mixed ... extra) {
+        post("update", ([ "commit" : ([ ]) ]), cb, @extra);
     }
 
     void delete(array(mixed) ids, call_cb cb, mixed ... extra) {
@@ -300,5 +301,13 @@ class Schema {
 
     void replace_dynamic_field(mapping config, call_cb cb, mixed ... extra) {
         post(0, ([ "replace-dynamic-field" : config ]), cb, @extra);
+    }
+
+    void add_copy_field(string src, array(string)|string dst, call_cb cb, mixed ... extra) {
+        post(0, ([ "add-copy-field" : ([ "source" : src, "dest" : dst ]) ]), cb, @extra);
+    }
+
+    void delete_copy_field(string src, array(string)|string dst, call_cb cb, mixed ... extra) {
+        post(0, ([ "delete-copy-field" : ([ "source" : src, "dest" : dst ]) ]), cb, @extra);
     }
 }

@@ -108,6 +108,9 @@ class Instance {
     void get_json(string path, mapping args, call_cb cb, mixed ... extra) {
         Standards.URI rurl = Standards.URI(path, url);
 
+        if (!args) args = ([ "wt" : "json" ]);
+        else args += ([ "wt" : "json" ]);
+
         solr_debug("get_json: %O\n", rurl);
 
         http->async_get_url(rurl, args||([]), headers_ok, json_data_ok, fail, cb, extra);
@@ -115,6 +118,9 @@ class Instance {
 
     void get_xml(string path, mapping args, call_cb cb, mixed ... extra) {
         Standards.URI rurl = Standards.URI(path, url);
+
+        if (!args) args = ([ "wt" : "xml" ]);
+        else args += ([ "wt" : "xml" ]);
 
         solr_debug("get_xml: %O\n", rurl);
 

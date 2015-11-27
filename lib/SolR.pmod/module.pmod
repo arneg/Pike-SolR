@@ -27,7 +27,9 @@ class Timeout {
 }
 
 class Instance {
-    private void json_data_ok(object request, call_cb cb, array extra) {
+    int timeout = 5;
+
+    private void json_data_ok(object request, call_cb cb) {
         string s = request->data();
         mapping ret;
         
@@ -36,22 +38,19 @@ class Instance {
         if (mixed err = catch (ret = Standards.JSON.decode(s))) {
             solr_debug("Invalid JSON:\n%s\n----\n", s);
             // TODO: test this case for real
-            cb(0, Error(([ "name" : "invalid_json", "error" : describe_error(err) ])), @extra);
+            cb(0, Error(([ "name" : "invalid_json", "error" : describe_error(err) ])));
             return;
         }
 
         if (ret->errors && sizeof(ret->errors) || ret->error) {
-            cb(0, ret, @extra);
+            cb(0, ret);
             return;
         }
 
-        cb(1, ret, @extra);
+        cb(1, ret);
     }
 
-    void foo(mixed ... args) {
-    }
-
-    private void xml_data_ok(object request, call_cb cb, array extra) {
+    private void xml_data_ok(object request, call_cb cb) {
         string s = request->data();
         mixed ret;
         
@@ -59,15 +58,15 @@ class Instance {
         //
         if (mixed err = catch (ret = Parser.XML.Tree.parse_input(s))) {
             // TODO: test this case for real
-            cb(0, Error(([ "name" : "invalid_xml", "error" : describe_error(err) ])), @extra);
+            cb(0, Error(([ "name" : "invalid_xml", "error" : describe_error(err) ])));
             return;
         }
 
-        cb(1, ret, @extra);
+        cb(1, ret);
     }
 
-    private void fail(object request, call_cb cb, array extra) {
-        cb(0, Timeout(), @extra);
+    private void fail(object request, call_cb cb) {
+        cb(0, Timeout());
     }
 
     Protocols.HTTP.Session http = Protocols.HTTP.Session();
@@ -75,6 +74,30 @@ class Instance {
 
     void create(string host, int port) {
         url = Standards.URI(sprintf("http://%s:%d/solr/", host, port));
+    }
+
+    call_cb handle_timeout(call_cb cb, array(mixed) extra) {
+        int called = 0;
+        mixed timeout_id;
+
+        void my_cb(int ok, mapping|object(Error) res) {
+            if (called) return;
+            called = 1;
+            remove_call_out(timeout_id);
+
+            cb(ok, res, @extra);
+        };
+
+        void timeout_cb() {
+            if (called) return;
+            called = 1;
+
+            cb(0, Timeout(), @extra);
+        };
+
+        timeout_id = call_out(timeout_cb, timeout);
+
+        return my_cb;
     }
 
     //!
@@ -89,7 +112,7 @@ class Instance {
 
         http->async_do_method_url("POST", rurl, 0, string_to_utf8(Standards.JSON.encode(data)),
                                   ([ "Content-Type" : "application/json" ]),
-                                  headers_ok, json_data_ok, fail, ({ cb, extra }));
+                                  headers_ok, json_data_ok, fail, ({ handle_timeout(cb, extra) }));
     }
 
     void post_xml(string path, mixed data, call_cb cb, mixed ... extra) {
@@ -98,7 +121,7 @@ class Instance {
         solr_debug("post_xml: %O %O\n", rurl, data);
 
         http->async_post_url(rurl, string_to_utf8(Standards.JSON.encode(data)),
-                             headers_ok, xml_data_ok, fail, cb, extra);
+                             headers_ok, xml_data_ok, fail, handle_timeout(cb, extra));
     }
 
     void get(string path, mapping args, call_cb cb, mixed ... extra) {
@@ -113,7 +136,7 @@ class Instance {
 
         solr_debug("get_json: %O\n", rurl);
 
-        http->async_get_url(rurl, args||([]), headers_ok, json_data_ok, fail, cb, extra);
+        http->async_get_url(rurl, args||([]), headers_ok, json_data_ok, fail, handle_timeout(cb, extra));
     }
 
     void get_xml(string path, mapping args, call_cb cb, mixed ... extra) {
@@ -124,7 +147,7 @@ class Instance {
 
         solr_debug("get_xml: %O\n", rurl);
 
-        http->async_get_url(rurl, args||([]), headers_ok, xml_data_ok, fail, cb, extra);
+        http->async_get_url(rurl, args||([]), headers_ok, xml_data_ok, fail, handle_timeout(cb, extra));
     }
 
     object admin = Admin(this);

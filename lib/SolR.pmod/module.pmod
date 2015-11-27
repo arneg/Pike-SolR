@@ -80,6 +80,8 @@ class Instance {
         int called = 0;
         mixed timeout_id;
 
+        if (!cb) error("Bad argument.\n");
+
         void my_cb(int ok, mapping|object(Error) res) {
             if (called) return;
             called = 1;

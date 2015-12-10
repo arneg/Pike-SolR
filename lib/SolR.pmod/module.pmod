@@ -14,11 +14,14 @@ class Error(mapping info) {
     }
 
     //!
-    constant is_error = 1;
+    constant is_solr_error = 1;
 }
 
 class Timeout {
     inherit Error;
+
+    //!
+    constant is_timeout = 1;
 
     void create() {
         ::create(([ "name" : "http_timeout",
